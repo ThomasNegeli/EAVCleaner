@@ -9,10 +9,10 @@
   },
   "autoload": {
     "files": [
-      "app/code/EAVCleaner/registration.php"
+      "app/code/Hackaton/EAVCleaner/registration.php"
     ],
     "psr-4": {
-      "EAVCleaner\\": "app/code/EAVCleaner/"
+      "EAVCleaner\\": "app/code/Hackaton/EAVCleaner/"
     }
   }
 }

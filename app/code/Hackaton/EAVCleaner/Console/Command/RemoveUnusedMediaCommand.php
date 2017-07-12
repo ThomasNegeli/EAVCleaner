@@ -6,11 +6,25 @@ use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Question\ConfirmationQuestion;
-use Symfony\Component\Console\Input\InputOption;
 use Magento\Framework\App\Filesystem\DirectoryList;
+use Magento\Framework\App\ResourceConnection;
+use Magento\Framework\Filesystem;
 
 class RemoveUnusedMediaCommand extends Command
 {
+
+    private $resource;
+    private $filesystem;
+
+    public function __construct (
+        Filesystem $filesystem,
+        ResourceConnection $resource
+    )
+    {
+        $this->filesystem = $filesystem;
+        $this->resource = $resource;
+        parent::__construct();
+    }
 
     /**
      * Init command
@@ -31,7 +45,7 @@ class RemoveUnusedMediaCommand extends Command
      *
      * @return void;
      */
-    public function execute ( InputInterface $input, OutputInterface $output )
+    protected function execute ( InputInterface $input, OutputInterface $output )
     {
         $filesize = 0;
         $countFiles = 0;
@@ -47,39 +61,37 @@ class RemoveUnusedMediaCommand extends Command
         }
 
         $table = array();
-        $objectManager = \Magento\Framework\App\ObjectManager::getInstance();
-        $filesystem = $objectManager->get( 'Magento\Framework\Filesystem' );
-        $directory = $filesystem->getDirectoryRead( DirectoryList::MEDIA );
-        $imageDir = $directory->getAbsolutePath() . DIRECTORY_SEPARATOR . 'catalog' . DIRECTORY_SEPARATOR . 'product';
-        $resource = $objectManager->get( 'Magento\Framework\App\ResourceConnection' );
-        $mediaGallery = $resource->getConnection()->getTableName( 'catalog_product_entity_media_gallery' );
-        $coreRead = $resource->getConnection( 'core_read' );
-        $i = 0;
+        $mediaDirectory = $this->filesystem->getDirectoryRead( DirectoryList::MEDIA );
+        $imageDir = $mediaDirectory->getAbsolutePath() . DIRECTORY_SEPARATOR . 'catalog' . DIRECTORY_SEPARATOR . 'product';
+        $mediaGallery = $this->resource->getConnection()->getTableName( 'catalog_product_entity_media_gallery' );
+        $coreRead = $this->resource->getConnection( 'core_read' );
         $directoryIterator = new \RecursiveDirectoryIterator( $imageDir );
+
+        $values = $coreRead->fetchCol( 'SELECT value FROM ' . $mediaGallery );
 
         foreach (new \RecursiveIteratorIterator( $directoryIterator ) as $file) {
 
-            if (strpos( $file, "/cache" ) !== false || is_dir( $file )) {
+            if (strpos( $file, "/cache" ) !== false ||
+                strpos( $file, "/default" ) !== false ||
+                strpos( $file, "/placeholder" ) !== false ||
+                strpos( $file, "/watermark" ) !== false ||
+                is_dir( $file )
+            ) {
                 continue;
             }
 
             $filePath = str_replace( $imageDir, "", $file );
             if (empty( $filePath )) continue;
-            $value = $coreRead->fetchOne( 'SELECT value FROM ' . $mediaGallery . ' WHERE value = ?', array( $filePath ) );
-            if ($value == false) {
-                $row = array();
-                $row[] = $filePath;
-                $table[] = $row;
+
+            if (array_search( $filePath, $values ) !== false) {
                 $filesize += filesize( $file );
                 $countFiles++;
-                echo '## REMOVING: ' . $filePath . ' ##';
                 if (!$isDryRun) {
+                    $table[] = array( '## REMOVING: ' . $filePath . ' ##' );
                     unlink( $file );
                 } else {
-                    echo ' -- DRY RUN';
+                    $table[] = array( '## REMOVING: ' . $filePath . ' ## -- DRY RUN' );
                 }
-                echo PHP_EOL;
-                $i++;
             }
         }
 
@@ -88,6 +100,6 @@ class RemoveUnusedMediaCommand extends Command
         $this->getHelper( 'table' )
             ->setHeaders( $headers )
             ->setRows( $table )->render( $output );
-        $output->writeln( "Found " . number_format( $filesize / 1024 / 1024, '2' ) . " MB unused images in $countFiles files" );
+        $output->writeln( "Found " . number_format( $filesize / 1024 / 1024, '2' ) . " MB unused images in " . $countFiles . " files" );
     }
 }
