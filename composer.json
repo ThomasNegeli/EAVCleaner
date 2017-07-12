@@ -2,7 +2,7 @@
   "name": "hackathon/eavcleaner-m2",
   "description": "N/A",
   "type": "magento2-module",
-  "minimum-stability": "stable",
+  "minimum-stability": "dev",
   "require": {
     "php": ">=5.6.0",
     "magento/framework": "100.0.*"
